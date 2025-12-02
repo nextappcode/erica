@@ -37,9 +37,10 @@ app.post('/api/generate', async (req, res) => {
     }
 
     const ai = createAiClient(apiKey);
-    const modelClient = ai.getGenerativeModel({ model });
-
-    const result = await modelClient.generateContent(prompt);
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
     const text = result.response?.text() ?? '';
 
     res.json({ text });
@@ -58,9 +59,8 @@ app.post('/api/generate-tts', async (req, res) => {
     }
 
     const ai = createAiClient(apiKey);
-    const modelClient = ai.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-
-    const result = await modelClient.generateContent({
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-exp',
       contents: [
         { role: 'user', parts: [{ text }] },
       ],
@@ -98,15 +98,9 @@ wss.on('connection', (ws) => {
       if (message.type === 'connect') {
         const { voiceName = 'Puck', topic = 'daily life', apiKey } = message.config || {};
 
-        ai = createAiClient(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
-
-        const systemInstruction = `You are a friendly, patient American English tutor named "Sam".
-Speak clearly and help the user practice speaking. Topic: ${topic}.`;
-
-        liveSession = await model.startChat({
-          systemInstruction,
-        });
+        // TODO: Integrate real Gemini Live session using the latest SDK.
+        // Por ahora solo validamos que haya apiKey y confirmamos la conexión.
+        createAiClient(apiKey);
 
         ws.send(JSON.stringify({ type: 'connected' }));
       } else if (message.type === 'audio-input') {
