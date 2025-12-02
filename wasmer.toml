@@ -1,0 +1,12 @@
+[app]
+name = "erica-node-backend"
+
+[app.runtime]
+kind = "node"
+
+[app.env]
+NODE_ENV = "production"
+
+[app.commands]
+install = "npm install"
+start = "npm start"

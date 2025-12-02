@@ -1,0 +1,4 @@
+name: server
+owner: vakej
+package: .
+kind: wasmer.io/App.v0
