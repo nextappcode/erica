@@ -89,7 +89,7 @@ wss.on('connection', (ws) => {
   console.log('Client connected to /api/live');
 
   let ai = null;
-  let liveSession = null;
+  let liveSessionPromise = null;
 
   ws.on('message', async (data) => {
     try {
@@ -98,14 +98,89 @@ wss.on('connection', (ws) => {
       if (message.type === 'connect') {
         const { voiceName = 'Puck', topic = 'daily life', apiKey } = message.config || {};
 
-        // TODO: Integrate real Gemini Live session using the latest SDK.
-        // Por ahora solo validamos que haya apiKey y confirmamos la conexión.
-        createAiClient(apiKey);
+        if (!apiKey) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Missing API key' }));
+          return;
+        }
 
-        ws.send(JSON.stringify({ type: 'connected' }));
+        try {
+          ai = new GoogleGenAI({ apiKey });
+
+          const systemInstruction = `You are a friendly, patient American English tutor named "Sam".
+Your goal is to help the user improve their spoken English.
+Speak with a clear, standard American accent.
+The current conversation topic is: "${topic}".
+Start by introducing yourself and asking a question related to ${topic}.
+Gently correct significant grammatical or pronunciation errors, but prioritize the flow of conversation.
+Use common American idioms occasionally and explain them if asked.
+Keep your responses relatively concise to allow for a back-and-forth dialogue.`;
+
+          liveSessionPromise = ai.live.connect({
+            model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+            callbacks: {
+              onopen: () => {
+                console.log('Connected to Gemini Live');
+                ws.send(JSON.stringify({ type: 'connected' }));
+              },
+              onmessage: (message) => {
+                try {
+                  const serverContent = message.serverContent;
+                  ws.send(JSON.stringify({
+                    type: 'gemini-message',
+                    data: { serverContent },
+                  }));
+                } catch (err) {
+                  console.error('Error forwarding message to client:', err);
+                }
+              },
+              onclose: () => {
+                console.log('Gemini Live session closed');
+                ws.send(JSON.stringify({ type: 'disconnected' }));
+              },
+              onerror: (err) => {
+                console.error('Gemini Live session error:', err);
+                ws.send(JSON.stringify({ type: 'error', error: String(err) }));
+              },
+            },
+            config: {
+              responseModalities: [Modality.AUDIO],
+              inputAudioTranscription: {},
+              outputAudioTranscription: {},
+              systemInstruction,
+              speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName } },
+              },
+            },
+          });
+        } catch (err) {
+          console.error('Failed to connect to Gemini:', err);
+          ws.send(JSON.stringify({ type: 'error', error: 'Failed to connect to Gemini: ' + String(err) }));
+        }
+
       } else if (message.type === 'audio-input') {
-        // TODO: integrate real Gemini Live audio streaming.
+        if (liveSessionPromise) {
+          try {
+            const { audioData, mimeType } = message;
+            liveSessionPromise.then((session) => {
+              if (session && typeof session.sendRealtimeInput === 'function') {
+                session.sendRealtimeInput({
+                  media: { data: audioData, mimeType },
+                });
+              }
+            });
+          } catch (err) {
+            console.error('Error sending audio to Gemini:', err);
+          }
+        }
       } else if (message.type === 'disconnect') {
+        if (liveSessionPromise) {
+          liveSessionPromise.then((session) => {
+            if (session && typeof session.close === 'function') {
+              session.close();
+            }
+          });
+          liveSessionPromise = null;
+        }
         ws.close();
       }
     } catch (error) {
