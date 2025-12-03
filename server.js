@@ -60,14 +60,16 @@ app.post('/api/generate-tts', async (req, res) => {
 
     const ai = createAiClient(apiKey);
     const result = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      // Usamos el mismo modelo de audio que en la sesión Live
+      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       contents: [
         { role: 'user', parts: [{ text }] },
       ],
       generationConfig: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { name: voiceName },
+          // Voces predefinidas de Gemini: "Zephyr", "Puck", "Charon", "Kore", "Fenrir", etc.
+          voiceConfig: { prebuiltVoiceConfig: { voiceName } },
         },
       },
     });
