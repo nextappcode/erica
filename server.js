@@ -60,8 +60,8 @@ app.post('/api/generate-tts', async (req, res) => {
 
     const ai = createAiClient(apiKey);
     const result = await ai.models.generateContent({
-      // Usamos el mismo modelo de audio que en la sesión Live
-      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+      // Modelo de texto-a-audio soportado por generateContent en v1beta
+      model: 'gemini-2.0-flash-exp',
       contents: [
         { role: 'user', parts: [{ text }] },
       ],
