@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 import { GoogleGenAI, Modality } from '@google/genai';
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
+import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -15,6 +18,44 @@ function createAiClient(apiKey) {
     throw new Error('Missing Gemini API key');
   }
   return new GoogleGenAI({ apiKey });
+}
+
+// Fallback TTS using system voices
+function generateSystemTTS(text, voice) {
+  return new Promise((resolve, reject) => {
+    const voiceMap = {
+      'Aoede': 'Samantha',    // macOS female voice
+      'Charon': 'Alex',       // macOS male voice  
+      'Fenrir': 'Bruce',      // macOS deep male voice
+      'Kore': 'Karen',        // macOS female voice
+      'Puck': 'Daniel'        // macOS male voice
+    };
+    
+    const systemVoice = voiceMap[voice] || 'Karen';
+    const tempFile = path.join(process.cwd(), `temp_${Date.now()}.aiff`);
+    
+    const command = process.platform === 'darwin' 
+      ? `say -v "${systemVoice}" -o "${tempFile}" "${text}"`
+      : `echo "${text}" | festival --tts`;
+    
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        console.error('System TTS error:', error);
+        reject(error);
+        return;
+      }
+      
+      if (process.platform === 'darwin' && fs.existsSync(tempFile)) {
+        // Convert AIFF to base64
+        const audioBuffer = fs.readFileSync(tempFile);
+        const audioBase64 = audioBuffer.toString('base64');
+        fs.unlinkSync(tempFile); // Clean up
+        resolve(audioBase64);
+      } else {
+        reject(new Error('TTS generation failed'));
+      }
+    });
+  });
 }
 
 app.use(cors());
@@ -30,7 +71,7 @@ app.get('/api/health', (req, res) => {
 
 app.post('/api/generate', async (req, res) => {
   try {
-    const { prompt, model = 'gemini-2.0-flash-exp', apiKey } = req.body;
+    const { prompt, model = 'gemini-3.0-flash', apiKey } = req.body;
 
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt in request body' });
@@ -52,30 +93,59 @@ app.post('/api/generate', async (req, res) => {
 
 app.post('/api/generate-tts', async (req, res) => {
   try {
-    const { text, voiceName = 'Puck', apiKey } = req.body;
+    const { text, voice = 'Kore', apiKey } = req.body;
+    
+    console.log(`TTS Request - voice: ${voice}, text: "${text.substring(0, 50)}..."`);
 
     if (!text) {
       return res.status(400).json({ error: 'Missing text in request body' });
     }
 
-    const ai = createAiClient(apiKey);
-    const result = await ai.models.generateContent({
-      // Modelo de texto-a-audio soportado por generateContent en v1beta
-      model: 'gemini-2.0-flash-exp',
-      contents: [
-        { role: 'user', parts: [{ text }] },
-      ],
-      generationConfig: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          // Voces predefinidas de Gemini: "Zephyr", "Puck", "Charon", "Kore", "Fenrir", etc.
-          voiceConfig: { prebuiltVoiceConfig: { voiceName } },
-        },
-      },
-    });
+    if (!apiKey) {
+      return res.status(400).json({ error: 'Missing Gemini API key' });
+    }
 
-    const audioData = result.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    const audioBase64 = audioData?.data ?? '';
+    let audioBase64 = '';
+    
+    try {
+      // Try Gemini TTS first
+      const ai = createAiClient(apiKey);
+      
+      console.log(`Using Gemini TTS with voice: ${voice}`);
+      
+      const result = await ai.models.generateContent({
+        model: 'gemini-2.5-flash-preview-tts',
+        contents: [
+          { role: 'user', parts: [{ text }] },
+        ],
+        generationConfig: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
+          },
+        },
+      });
+
+      const audioData = result.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+      audioBase64 = audioData?.data ?? '';
+      
+      if (!audioBase64) {
+        throw new Error('No audio data from Gemini');
+      }
+      
+      console.log('Gemini TTS successful');
+      
+    } catch (geminiError) {
+      console.log('Gemini TTS failed, using system fallback:', geminiError.message);
+
+      // Fallback to system TTS only on macOS (Render/Linux typically won't have festival)
+      if (process.platform !== 'darwin') {
+        throw geminiError;
+      }
+
+      audioBase64 = await generateSystemTTS(text, voice);
+      console.log('System TTS fallback successful');
+    }
 
     res.json({ audioBase64 });
   } catch (error) {
@@ -98,7 +168,7 @@ wss.on('connection', (ws) => {
       const message = JSON.parse(data.toString());
 
       if (message.type === 'connect') {
-        const { voiceName = 'Puck', topic = 'Student', apiKey } = message.config || {};
+        const { voiceName = 'Kore', topic = 'Student', apiKey } = message.config || {};
 
         if (!apiKey) {
           ws.send(JSON.stringify({ type: 'error', error: 'Missing API key' }));
@@ -130,7 +200,7 @@ Be very encouraging and kind, but do not ignore mistakes: always correct importa
 Keep each response concise so the conversation remains interactive and the user can practice speaking a lot.`;
 
           liveSessionPromise = ai.live.connect({
-            model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+            model: 'gemini-3.0-flash',
             callbacks: {
               onopen: () => {
                 console.log('Connected to Gemini Live');
