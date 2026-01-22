@@ -114,7 +114,7 @@ app.post('/api/generate-tts', async (req, res) => {
       console.log(`Using Gemini TTS with voice: ${voice}`);
       
       const result = await ai.models.generateContent({
-        model: 'models/gemini-2.5-flash-native-audio',
+        model: 'gemini-2.5-flash-native-audio',
         contents: [
           { role: 'user', parts: [{ text }] },
         ],
