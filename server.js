@@ -106,6 +106,7 @@ app.post('/api/generate-tts', async (req, res) => {
     }
 
     let audioBase64 = '';
+    let audioMimeType = '';
     
     try {
       // Try Gemini TTS first
@@ -114,7 +115,7 @@ app.post('/api/generate-tts', async (req, res) => {
       console.log(`Using Gemini TTS with voice: ${voice}`);
       
       const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-preview-tts',
+        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
         contents: [
           { role: 'user', parts: [{ text }] },
         ],
@@ -128,6 +129,7 @@ app.post('/api/generate-tts', async (req, res) => {
 
       const audioData = result.response?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
       audioBase64 = audioData?.data ?? '';
+      audioMimeType = audioData?.mimeType ?? '';
       
       if (!audioBase64) {
         throw new Error('No audio data from Gemini');
@@ -144,10 +146,11 @@ app.post('/api/generate-tts', async (req, res) => {
       }
 
       audioBase64 = await generateSystemTTS(text, voice);
+      audioMimeType = 'audio/aiff';
       console.log('System TTS fallback successful');
     }
 
-    res.json({ audioBase64 });
+    res.json({ audioBase64, audioMimeType });
   } catch (error) {
     console.error('Error in /api/generate-tts:', error);
     res.status(500).json({ error: 'Failed to generate TTS', details: String(error) });
