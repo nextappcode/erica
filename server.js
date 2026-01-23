@@ -113,18 +113,18 @@ app.post('/api/generate-tts', async (req, res) => {
     let audioMimeType = '';
     
     try {
-      // Try Gemini TTS first
+      // Use gemini-2.0-flash-exp for TTS generation (supports audio modality)
       const ai = createAiClient(apiKey);
       
       console.log(`Using Gemini TTS with voice: ${voice}`);
       
       const result = await ai.models.generateContent({
-        model: GEMINI_LIVE_MODEL,
+        model: 'gemini-2.0-flash-exp',
         contents: [
           { role: 'user', parts: [{ text }] },
         ],
         generationConfig: {
-          responseModalities: [Modality.AUDIO],
+          responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } },
           },
@@ -142,7 +142,7 @@ app.post('/api/generate-tts', async (req, res) => {
       console.log('Gemini TTS successful');
       
     } catch (geminiError) {
-      console.log('Gemini TTS failed, using system fallback:', geminiError.message);
+      console.log('Gemini TTS failed:', geminiError.message);
 
       // Fallback to system TTS only on macOS (Render/Linux typically won't have festival)
       if (process.platform !== 'darwin') {
