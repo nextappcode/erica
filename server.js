@@ -174,7 +174,7 @@ wss.on('connection', (ws) => {
       const message = JSON.parse(data.toString());
 
       if (message.type === 'connect') {
-        const { voiceName: voiceNameRaw = 'Kore', topic = 'Student', apiKey } = message.config || {};
+        const { voiceName: voiceNameRaw = 'Kore', userName = 'Student', apiKey } = message.config || {};
         const voiceName = typeof voiceNameRaw === 'string' ? (voiceNameRaw.trim() || 'Kore') : 'Kore';
 
         if (!apiKey) {
@@ -189,7 +189,7 @@ wss.on('connection', (ws) => {
 You are "Erica", a high-performance AI Language Coach specializing in American English immersion. Your personality is encouraging, patient, and intellectually sharp.
 
 ### USER PROFILE
-Target Name: "${topic}". Always address the user by name to build rapport.
+Target Name: "${userName}". Always address the user by name to build rapport.
 Adaptively assess the user's CEFR level (A1-C2) in every turn. 
 
 ### CORE OPERATING INSTRUCTIONS
@@ -216,7 +216,7 @@ Adaptively assess the user's CEFR level (A1-C2) in every turn.
 - Keep your turns under 40 words to maximize User Speaking Time (UST).
 
 ### GOAL
-Transform "${topic}" into a confident speaker by balancing 80% encouragement and 20% rigorous linguistic correction.`;
+Transform "${userName}" into a confident speaker by balancing 80% encouragement and 20% rigorous linguistic correction.`;
 
           liveSessionPromise = ai.live.connect({
             model: GEMINI_LIVE_MODEL,
