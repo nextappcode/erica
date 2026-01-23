@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.5-flash-native-audio-preview-09-2025';
+const GEMINI_LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || 'gemini-2.0-flash-exp';
 
 function createAiClient(apiKey) {
   if (!apiKey) {
@@ -30,7 +30,8 @@ function generateSystemTTS(text, voice) {
       'Charon': 'Alex',       // macOS male voice  
       'Fenrir': 'Bruce',      // macOS deep male voice
       'Kore': 'Karen',        // macOS female voice
-      'Puck': 'Daniel'        // macOS male voice
+      'Puck': 'Daniel',       // macOS male voice
+      'Orion': 'Alex'         // macOS fallback
     };
     
     const systemVoice = voiceMap[voice] || 'Karen';
@@ -95,8 +96,8 @@ app.post('/api/generate', async (req, res) => {
 
 app.post('/api/generate-tts', async (req, res) => {
   try {
-    const { text, voice: voiceRaw = 'Kore', apiKey } = req.body;
-    const voice = typeof voiceRaw === 'string' ? (voiceRaw.trim() || 'Kore') : 'Kore';
+    const { text, voice: voiceRaw = 'Puck', apiKey } = req.body;
+    const voice = typeof voiceRaw === 'string' ? (voiceRaw.trim() || 'Puck') : 'Puck';
     
     console.log(`TTS Request - voice: ${voice}, text: "${text.substring(0, 50)}..."`);
 
@@ -118,7 +119,7 @@ app.post('/api/generate-tts', async (req, res) => {
       console.log(`Using Gemini TTS with voice: ${voice}`);
       
       const result = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+        model: GEMINI_LIVE_MODEL,
         contents: [
           { role: 'user', parts: [{ text }] },
         ],
@@ -174,8 +175,8 @@ wss.on('connection', (ws) => {
       const message = JSON.parse(data.toString());
 
       if (message.type === 'connect') {
-        const { voiceName: voiceNameRaw = 'Kore', userName = 'Student', apiKey } = message.config || {};
-        const voiceName = typeof voiceNameRaw === 'string' ? (voiceNameRaw.trim() || 'Kore') : 'Kore';
+        const { voiceName: voiceNameRaw = 'Puck', userName = 'Student', apiKey } = message.config || {};
+        const voiceName = typeof voiceNameRaw === 'string' ? (voiceNameRaw.trim() || 'Puck') : 'Puck';
 
         if (!apiKey) {
           ws.send(JSON.stringify({ type: 'error', error: 'Missing API key' }));
@@ -249,9 +250,11 @@ Transform "${userName}" into a confident speaker by balancing 80% encouragement 
               responseModalities: [Modality.AUDIO],
               inputAudioTranscription: {},
               outputAudioTranscription: {},
-              systemInstruction,
-              speechConfig: {
-                voiceConfig: { prebuiltVoiceConfig: { voiceName } },
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              generationConfig: {
+                speechConfig: {
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName } },
+                },
               },
             },
           });
